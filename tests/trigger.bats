@@ -403,3 +403,20 @@ load '/usr/local/lib/bats/load.bash'
   assert_output --partial "      X: y"
   assert_output --partial "  - command: ./diff 123"
 }
+
+@test "Generates trigger with if clause" {
+  export BUILDKITE_PLUGIN_MONOREPO_DIFF_DIFF="cat $PWD/tests/mocks/diff1"
+  export BUILDKITE_PLUGIN_MONOREPO_DIFF_WATCH_0_PATH="services/foo"
+  export BUILDKITE_PLUGIN_MONOREPO_DIFF_WATCH_0_CONFIG_TRIGGER="slug-for-foo"
+  export BUILDKITE_PLUGIN_MONOREPO_DIFF_WATCH_0_CONFIG_IF="build.tag =~ /^prefix[^\|]+/ || build.message =~ /^.*\[sauce\].*/"
+  export DEBUG=true
+
+  stub buildkite-agent \
+    "pipeline upload : echo uploading"
+
+  run $PWD/hooks/command
+
+  unstub buildkite-agent
+  assert_success
+  assert_output --partial "    if: build.tag =~ /^prefix[^\|]+/ || build.message =~ /^.*\[sauce\].*/"
+}

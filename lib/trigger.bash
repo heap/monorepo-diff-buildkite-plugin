@@ -67,6 +67,7 @@ function add_action_trigger() {
   add_label "$(read_pipeline_config "$pipeline_index" "LABEL")"
   add_async "$(read_pipeline_config "$pipeline_index" "ASYNC")"
   add_branches "$(read_pipeline_config "$pipeline_index" "BRANCHES")"
+  add_if "$(read_pipeline_config "$pipeline_index" "IF")"
   add_build "$pipeline_index"
 }
 
@@ -135,6 +136,14 @@ function add_async() {
 
   if [[ -n $async ]]; then
     pipeline_yml+=("    async: ${async}")
+  fi
+}
+
+function add_if() {
+  local iff=$1
+
+  if [[ -n $iff ]]; then
+    pipeline_yml+=("    if: ${iff}")
   fi
 }
 
