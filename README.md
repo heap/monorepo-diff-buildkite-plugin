@@ -131,6 +131,14 @@ If the `path` specified here in the appears in the `diff` output, a `trigger` st
 
 A list of paths can be provided to trigger the desired pipeline. Changes in any of the paths will initiate the pipeline provided in trigger.
 
+NOTE: `path` is evaluated as an extended regex (`grep -P`) following a start-anchor `^`; this means you can use plain path prefixes for matching, but also general regular expressions. For example:
+
+```yaml
+- path: (?!src).*\.md$
+  config:
+    trigger: process-markdown-outside-src-only
+```
+
 ### `config`
 
 Configuration supports 2 different step types.
