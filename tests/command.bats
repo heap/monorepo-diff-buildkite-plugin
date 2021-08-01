@@ -1,5 +1,7 @@
 #!/usr/bin/env bats
 
+apk add --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/v3.14/main/ grep=3.6-r0
+
 load '/usr/local/lib/bats/load.bash'
 
 @test "Notify when there are no changes" {

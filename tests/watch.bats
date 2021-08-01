@@ -40,3 +40,21 @@ load '/usr/local/lib/bats/load.bash'
   assert_output --partial "Generating trigger for path: services/foo"
   assert_output --partial "Generating command for path: services/bar"
 }
+
+@test "Generates trigger based on extended regex path" {
+  export BUILDKITE_PLUGIN_MONOREPO_DIFF_DIFF="cat $PWD/tests/mocks/diff1"
+  export BUILDKITE_PLUGIN_MONOREPO_DIFF_WATCH_0_PATH='(?!ops|README).*/foo'
+  export BUILDKITE_PLUGIN_MONOREPO_DIFF_WATCH_0_CONFIG_TRIGGER="slug-for-foo"
+  export DEBUG=true
+  export BUILDKITE_AGENT_STUB_DEBUG=1
+
+  stub buildkite-agent \
+    "pipeline upload : echo uploading"
+
+  run $PWD/hooks/command
+
+  unstub buildkite-agent
+  assert_success
+  assert_output --partial "Generating trigger for path: (?!ops|README).*/foo"
+  assert_output --partial "  - trigger: slug-for-foo"
+}
