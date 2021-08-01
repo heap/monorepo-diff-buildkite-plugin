@@ -50,6 +50,7 @@ steps:
             - path: "foo-service/"
               config:
                 trigger: "deploy-foo-service"
+                if: build.tag =~ /^deploy/
                 label: "Triggered deploy"
                 build:
                   message: "Deploying foo service"
