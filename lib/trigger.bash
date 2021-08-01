@@ -159,8 +159,8 @@ function add_build() {
   local pipeline=$1
 
   pipeline_yml+=("    build:")
-  add_build_commit "$(read_pipeline_config "$pipeline" "BUILD_COMMIT")"
   add_build_message "$(read_pipeline_config "$pipeline" "BUILD_MESSAGE")"
+  add_build_commit "$(read_pipeline_config "$pipeline" "BUILD_COMMIT")"
   add_build_branch "$(read_pipeline_config "$pipeline" "BUILD_BRANCH")"
   add_build_env "$pipeline"
 }
@@ -192,6 +192,11 @@ function add_build_env() {
   local build_env
   build_envs=$(read_pipeline_read_env "$pipeline" "BUILD_ENV")
 
+  if [[ -z "$build_envs" ]]; then
+    # Default: if no 'env' is specified, pass through PR and TAG to dependent build
+    build_envs=$(echo "BUILDKITE_PULL_REQUEST"; echo "BUILDKITE_TAG")
+  fi
+
   if [[ -n "$build_envs" ]]; then
     pipeline_yml+=("      env:")
     while IFS=$'\n' read -r build_env ; do
@@ -199,7 +204,7 @@ function add_build_env() {
       if [[ -n "$value" ]]; then
         pipeline_yml+=("        ${key}: ${value}")
       else
-        pipeline_yml+=("        ${key}: ${!key}")
+        pipeline_yml+=("        ${key}: ${!key:-}")
       fi
     done <<< "$build_envs"
   fi

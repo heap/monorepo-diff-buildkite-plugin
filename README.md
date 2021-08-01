@@ -150,8 +150,16 @@ By default, it will pass the following values to the `build` attributes unless a
     trigger: cms-deploy
     build:
       commit: $BUILDKITE_COMMIT
+      message: $BUILDKITE_MESSAGE
       branch: $BUILDKITE_BRANCH
+      env:
+        BUILDKITE_PULL_REQUEST: $BUILDKITE_PULL_REQUEST
+        BUILDKITE_TAG: $BUILDKITE_TAG
 ```
+
+Note that `message` is sanitized by escaping `"` and `$` so they do not throw off the pass-through.
+
+Also, the default `env` pass-through of `BUILDKITE_PULL_REQUEST` and `BUILDKITE_TAG` only function if no explicit environment values are set -- if you specify your own environment values you must include these explicitly where required. This is all geared towards simplifying the common case where you "just want to trigger a dependent sub-build" without too much config.
 
 ### `wait` (optional)
 
