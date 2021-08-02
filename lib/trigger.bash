@@ -20,7 +20,7 @@ function add_action() {
   local pipeline_path=$2
 
   local action_trigger
-  local command
+  local action_command
 
   action_trigger=$(read_pipeline_config "$pipeline_index" "TRIGGER")
   action_command=$(read_pipeline_config "$pipeline_index" "COMMAND")
@@ -36,22 +36,63 @@ function add_action() {
   fi
 }
 
-function add_action_command() {
-  local pipeline_index=$1
-  local pipeline_path=$2
+#
+# HELPERS SHARED BETWEEN COMMIT AND TRIGGER
+#
 
-  echo >&2 "Generating command for path: $pipeline_path"
+function add_label() {
+  local label=$1
 
-  local command
-  command=$(read_pipeline_config "$pipeline_index" "COMMAND")
-
-  pipeline_yml+=("  - command: ${command}")
-
-  add_label "$(read_pipeline_config "$pipeline_index" "LABEL")"
-  add_agents "$pipeline_index"
-  add_artifacts "$pipeline_index"
-  add_envs "$pipeline_index"
+  if [[ -n $label ]]; then
+    pipeline_yml+=("    label: \"${label}\"")
+  fi
 }
+
+function add_branches() {
+  local branches=$1
+
+  if [[ -n $branches ]]; then
+    pipeline_yml+=("    branches: ${branches}")
+  fi
+}
+
+function add_if() {
+  local iff=$1
+
+  if [[ -n $iff ]]; then
+    pipeline_yml+=("    if: ${iff}")
+  fi
+}
+
+function add_key() {
+  local key=$1
+
+  if [[ -n $key ]]; then
+    pipeline_yml+=("    key: ${key}")
+  fi
+}
+
+function add_depends_on() {
+  local pipeline_index=$1
+
+  local prefix="BUILDKITE_PLUGIN_MONOREPO_DIFF_WATCH_${pipeline_index}_CONFIG_DEPENDS"
+  local parameter="${prefix}_0"
+
+  pipeline_yml+=("    depends_on:")
+  if [[ -n "${!parameter:-}" ]]; then
+    local i=0
+    local parameter="${prefix}_${i}"
+    while [[ -n "${!parameter:-}" ]]; do
+      pipeline_yml+=("      - ${!parameter}")
+      i=$((i+1))
+      parameter="${prefix}_${i}"
+    done
+  fi
+}
+
+#
+# TRIGGER-SPECIFIC LOGIC
+#
 
 function add_action_trigger() {
   local pipeline_index=$1
@@ -64,71 +105,15 @@ function add_action_trigger() {
 
   pipeline_yml+=("  - trigger: ${trigger}")
 
+  # Generic properties to output
   add_label "$(read_pipeline_config "$pipeline_index" "LABEL")"
-  add_async "$(read_pipeline_config "$pipeline_index" "ASYNC")"
   add_branches "$(read_pipeline_config "$pipeline_index" "BRANCHES")"
   add_if "$(read_pipeline_config "$pipeline_index" "IF")"
+  add_key "$(read_pipeline_config "$pipeline_index" "KEY")"
+  add_depends_on "$pipeline_index"
+  # Trigger-only properties to output
+  add_async "$(read_pipeline_config "$pipeline_index" "ASYNC")"
   add_build "$pipeline_index"
-}
-
-function add_label() {
-  local label=$1
-
-  if [[ -n $label ]]; then
-    pipeline_yml+=("    label: \"${label}\"")
-  fi
-}
-
-function add_agents() {
-  local pipeline=$1
-
-  pipeline_yml+=("    agents:")
-  add_agents_queue "$(read_pipeline_config "$pipeline" "AGENTS_QUEUE")"
-}
-
-function add_artifacts() {
-  local pipeline=$1
-
-  local prefix="BUILDKITE_PLUGIN_MONOREPO_DIFF_WATCH_${pipeline}_CONFIG_ARTIFACTS"
-  local parameter="${prefix}_0"
-
-  pipeline_yml+=("    artifact_paths:")
-  if [[ -n "${!parameter:-}" ]]; then
-    local i=0
-    local parameter="${prefix}_${i}"
-    while [[ -n "${!parameter:-}" ]]; do
-      pipeline_yml+=("        - ${!parameter}")
-      i=$((i+1))
-      parameter="${prefix}_${i}"
-    done
-  fi
-}
-
-function add_envs () {
-  local pipeline=$1
-  local env
-  envs=$(read_pipeline_read_env "$pipeline" "ENV")
-  echo $envs
-
-  if [[ -n "$envs" ]]; then
-    pipeline_yml+=("    env:")
-    while IFS=$'\n' read -r env ; do
-      IFS='=' read -r key value <<< "$env"
-      if [[ -n "$value" ]]; then
-        pipeline_yml+=("      ${key}: ${value}")
-      else
-        pipeline_yml+=("      ${key}: ${!key}")
-      fi
-    done <<< "$envs"
-  fi
-}
-
-function add_agents_queue() {
-  local queue=$1
-
-  if [[ -n "$queue" ]]; then
-    pipeline_yml+=("      queue: \"${queue}\"")
-  fi
 }
 
 function add_async() {
@@ -139,30 +124,14 @@ function add_async() {
   fi
 }
 
-function add_if() {
-  local iff=$1
-
-  if [[ -n $iff ]]; then
-    pipeline_yml+=("    if: ${iff}")
-  fi
-}
-
-function add_branches() {
-  local branches=$1
-
-  if [[ -n $branches ]]; then
-    pipeline_yml+=("    branches: ${branches}")
-  fi
-}
-
 function add_build() {
-  local pipeline=$1
+  local pipeline_index=$1
 
   pipeline_yml+=("    build:")
-  add_build_message "$(read_pipeline_config "$pipeline" "BUILD_MESSAGE")"
-  add_build_commit "$(read_pipeline_config "$pipeline" "BUILD_COMMIT")"
-  add_build_branch "$(read_pipeline_config "$pipeline" "BUILD_BRANCH")"
-  add_build_env "$pipeline"
+  add_build_message "$(read_pipeline_config "$pipeline_index" "BUILD_MESSAGE")"
+  add_build_commit "$(read_pipeline_config "$pipeline_index" "BUILD_COMMIT")"
+  add_build_branch "$(read_pipeline_config "$pipeline_index" "BUILD_BRANCH")"
+  add_build_env "$pipeline_index"
 }
 
 function add_build_commit() {
@@ -188,9 +157,9 @@ function add_build_branch() {
 }
 
 function add_build_env() {
-  local pipeline=$1
+  local pipeline_index=$1
   local build_env
-  build_envs=$(read_pipeline_read_env "$pipeline" "BUILD_ENV")
+  build_envs=$(read_pipeline_read_env "$pipeline_index" "BUILD_ENV")
 
   if [[ -z "$build_envs" ]]; then
     # Default: if no 'env' is specified, pass through PR and TAG to dependent build
@@ -210,6 +179,88 @@ function add_build_env() {
   fi
 }
 
+#
+# COMMAND-SPECIFIC LOGIC
+#
+
+function add_action_command() {
+  local pipeline_index=$1
+  local pipeline_path=$2
+
+  echo >&2 "Generating command for path: $pipeline_path"
+
+  local command
+  command=$(read_pipeline_config "$pipeline_index" "COMMAND")
+
+  pipeline_yml+=("  - command: ${command}")
+
+  # Generic properties to output
+  add_label "$(read_pipeline_config "$pipeline_index" "LABEL")"
+  add_branches "$(read_pipeline_config "$pipeline_index" "BRANCHES")"
+  add_if "$(read_pipeline_config "$pipeline_index" "IF")"
+  add_key "$(read_pipeline_config "$pipeline_index" "KEY")"
+  add_depends_on "$pipeline_index"
+  # Command-only properties to output
+  add_agents "$pipeline_index"
+  add_artifacts "$pipeline_index"
+  add_envs "$pipeline_index"
+}
+
+function add_agents() {
+  local pipeline_index=$1
+
+  pipeline_yml+=("    agents:")
+  add_agents_queue "$(read_pipeline_config "$pipeline_index" "AGENTS_QUEUE")"
+}
+
+function add_agents_queue() {
+  local queue=$1
+
+  if [[ -n "$queue" ]]; then
+    pipeline_yml+=("      queue: \"${queue}\"")
+  fi
+}
+
+function add_artifacts() {
+  local pipeline_index=$1
+
+  local prefix="BUILDKITE_PLUGIN_MONOREPO_DIFF_WATCH_${pipeline_index}_CONFIG_ARTIFACTS"
+  local parameter="${prefix}_0"
+
+  pipeline_yml+=("    artifact_paths:")
+  if [[ -n "${!parameter:-}" ]]; then
+    local i=0
+    local parameter="${prefix}_${i}"
+    while [[ -n "${!parameter:-}" ]]; do
+      pipeline_yml+=("        - ${!parameter}")
+      i=$((i+1))
+      parameter="${prefix}_${i}"
+    done
+  fi
+}
+
+function add_envs () {
+  local pipeline_index=$1
+  local envs
+  envs=$(read_pipeline_read_env "$pipeline_index" "ENV")
+
+  if [[ -n "$envs" ]]; then
+    pipeline_yml+=("    env:")
+    while IFS=$'\n' read -r env ; do
+      IFS='=' read -r key value <<< "$env"
+      if [[ -n "$value" ]]; then
+        pipeline_yml+=("      ${key}: ${value}")
+      else
+        pipeline_yml+=("      ${key}: ${!key}")
+      fi
+    done <<< "$envs"
+  fi
+}
+
+#
+# METHODS BUILDING THE FOOTER
+#
+
 function add_wait() {
   local wait
   wait=${BUILDKITE_PLUGIN_MONOREPO_DIFF_WAIT:-true}
@@ -219,6 +270,12 @@ function add_wait() {
   fi
 }
 
+function add_hooks() {
+  while IFS=$'\n' read -r command ; do
+    add_command "$command"
+  done <<< "$(plugin_read_list HOOKS COMMAND)"
+}
+
 function add_command() {
   local command=$1
 
@@ -226,12 +283,6 @@ function add_command() {
     then
       pipeline_yml+=("  - command: ${command}")
   fi
-}
-
-function add_hooks() {
-  while IFS=$'\n' read -r command ; do
-    add_command "$command"
-  done <<< "$(plugin_read_list HOOKS COMMAND)"
 }
 
 function sanitize_string() {

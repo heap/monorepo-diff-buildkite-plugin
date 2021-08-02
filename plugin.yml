@@ -18,14 +18,20 @@ configuration:
         config:
           type: object
           properties:
-            command:
+            label:
               type: string
+            branches:
+              type: string
+            if:
+              type: string
+            key:
+              type: string
+            depends:
+              type: array
             trigger:
               type: string
             async:
               type: boolean
-            label:
-              type: string
             build:
               type: object
               properties:
@@ -37,6 +43,8 @@ configuration:
                   type: string
                 env:
                   type: array
+            command:
+              type: string
             agents:
               type: object
               properties:

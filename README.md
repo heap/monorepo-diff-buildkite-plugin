@@ -1,4 +1,4 @@
-# monorepo-diff-buildkite-plugin [![Build status](https://badge.buildkite.com/719d0b895285367c9c57a09e07f1e853148d2509f0667e0ae8.svg?branch=master)](https://buildkite.com/kuda/monorepo-diff-buildkite-plugin)
+# monorepo-diff-buildkite-plugin
 
 This plugin will assist you in triggering pipelines by watching folders in your `monorepo`.
 
@@ -35,12 +35,9 @@ steps:
                 - "ops/terraform/"
                 - "ops/templates/terraform/"
               config:
+                branches: "develop"
+                key: some-key
                 command: "buildkite-agent pipeline upload ops/.buildkite/pipeline.yml"
-                label: "Upload pipeline"
-                retry:
-                  automatic:
-                  - limit: 2
-                    exit_status: -1
                 agents:
                   queue: performance
                 artifacts:
@@ -49,15 +46,19 @@ steps:
                   - FOO=bar
             - path: "foo-service/"
               config:
+                depends:
+                  - some-key
                 trigger: "deploy-foo-service"
+                async: false
                 if: build.tag =~ /^deploy/
                 label: "Triggered deploy"
                 build:
                   message: "Deploying foo service"
+                  commit: "..."
+                  branch: "..."
                   env:
                     - HELLO=123
                     - AWS_REGION
-
           wait: true
           hooks:
             - command: "echo $(git rev-parse HEAD) > last_successful_build"
@@ -146,6 +147,23 @@ Configuration supports 2 different step types.
 - [Trigger](https://buildkite.com/docs/pipelines/trigger-step)
 - [Command](https://buildkite.com/docs/pipelines/command-step)
 
+#### Common configuration options
+
+The following parameters can be provided for both commands and triggers:
+
+```yaml
+- path: app/cms/
+  config:
+    label: ":buildkite: label for the step"
+    branches: "!develop"
+    if: ... some build filtering expression ...
+    key: ... step id ...
+    depends:
+      - ... list of step ids to depend on ...
+```
+
+Note, using `key` and `depends` can be dangerous and lead to pipeline deadlocks -- if the changed paths results in a dependency whose `key` step is not part of the output, the dependency will wait indefinitely.
+
 #### Trigger
 
 The configuration for the `trigger` step https://buildkite.com/docs/pipelines/trigger-step
@@ -156,6 +174,7 @@ By default, it will pass the following values to the `build` attributes unless a
 - path: app/cms/
   config:
     trigger: cms-deploy
+    async: false
     build:
       commit: $BUILDKITE_COMMIT
       message: $BUILDKITE_MESSAGE
@@ -168,6 +187,34 @@ By default, it will pass the following values to the `build` attributes unless a
 Note that `message` is sanitized by escaping `"` and `$` so they do not throw off the pass-through.
 
 Also, the default `env` pass-through of `BUILDKITE_PULL_REQUEST` and `BUILDKITE_TAG` only function if no explicit environment values are set -- if you specify your own environment values you must include these explicitly where required. This is all geared towards simplifying the common case where you "just want to trigger a dependent sub-build" without too much config.
+
+#### Command
+
+```yaml
+- path: app/cms/
+  config:
+    command: "netlify --production deploy"
+    agents:
+      queue: "deploy"
+    artifacts:
+      - *.xml
+    env:
+      FOO: bar
+```
+
+Using commands, it is also possible to use this to upload other pipeline definitions:
+
+```yaml
+- path: frontend/
+  config:
+    command: "buildkite-agent pipeline upload ./frontend/.buildkite/pipeline.yaml"
+- path: infrastructure/
+  config:
+    command: "buildkite-agent pipeline upload ./infrastructure/.buildkite/pipeline.yaml"
+- path: backend/
+  config:
+    command: "buildkite-agent pipeline upload ./backend/.buildkite/pipeline.yaml"
+```
 
 ### `wait` (optional)
 
@@ -184,35 +231,6 @@ hooks:
   - command: upload unit tests reports
   - command: echo success
 
-```
-
-#### Command
-
-```yaml
-- path: app/cms/
-  config:
-    command: "netlify --production deploy"
-    label: ":netlify: Deploy to production"
-    agents:
-      queue: "deploy"
-    env:
-      FOO: bar
-```
-
-There is currently limited support for command configuration. Only the `command` property can be provided at this point in time.
-
-Using commands, it is also possible to use this to upload other pipeline definitions
-
-```yaml
-- path: frontend/
-  config:
-    command: "buildkite-agent pipeline upload ./frontend/.buildkite/pipeline.yaml"
-- path: infrastructure/
-  config:
-    command: "buildkite-agent pipeline upload ./infrastructure/.buildkite/pipeline.yaml"
-- path: backend/
-  config:
-    command: "buildkite-agent pipeline upload ./backend/.buildkite/pipeline.yaml"
 ```
 
 ## Environment
