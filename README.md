@@ -10,7 +10,7 @@ This plugin will assist you in triggering pipelines by watching folders in your 
 steps:
   - label: "Triggering pipelines"
     plugins:
-      - heap/monorepo-diff#v1.3.3:
+      - heap/monorepo-diff#v1.3.4:
           diff: "git diff --name-only HEAD~1"
           watch:
             - path: "bar-service/"
@@ -27,7 +27,7 @@ steps:
 steps:
   - label: "Triggering pipelines"
     plugins:
-      - heap/monorepo-diff#v1.3.3:
+      - heap/monorepo-diff#v1.3.4:
           diff: "git diff --name-only $(head -n 1 last_successful_build)"
           interpolation: false
           watch:
