@@ -32,5 +32,5 @@ else
     NO_INTERPOLATION="--no-interpolation"
   fi
 
-  echo "$output" | MONODIFF="${diff}" buildkite-agent pipeline upload ${NO_INTERPOLATION}
+  echo "$output" | buildkite-agent pipeline upload ${NO_INTERPOLATION}
 fi
